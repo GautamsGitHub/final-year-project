@@ -60,7 +60,7 @@ def gradients_qre_nonsym(dist, y, anneal_steps, polymatrix_game: PolymatrixGame,
         nabla_i = payoff_vectors_dist[i] / float(num_players - 1)
 
         grad_y.append(y[i] - nabla_i)
-        # if we want don't want to bother with amortized
+        # if we want don't want to bother with amortized:
         # y[i] = nabla_i
 
         if temp >= 1e-3:  # numerical under/overflow for temp < 1e-3
@@ -80,6 +80,9 @@ def gradients_qre_nonsym(dist, y, anneal_steps, polymatrix_game: PolymatrixGame,
         policy_gradient_i = np.array(nabla_i)
         if temp > 0:
             log_dist_i_safe = np.clip(np.log(dist[i]), logit_clip, 0)
+            if (dist[i] == 0).any():
+                print("log_dist_i_safe:", log_dist_i_safe)
+                # input("hello")
             policy_gradient_i -= temp * (log_dist_i_safe + 1)
         policy_gradient.append(policy_gradient_i)
 
@@ -113,7 +116,9 @@ def gradients_qre_nonsym(dist, y, anneal_steps, polymatrix_game: PolymatrixGame,
 
     _, lr_y = lrs
     if (reg_exp_mean < exp_thresh) and (anneal_steps > 1 / lr_y):
-        temp = np.clip(temp / 2., 0., 1.)
+        temp = temp/2
+        # original was
+        # temp = np.clip(temp / 2., 0., 1.)
         if temp < 1e-3:  # consistent with numerical issue above
             temp = 0.
         grad_anneal_steps = 0

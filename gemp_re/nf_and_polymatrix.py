@@ -66,7 +66,13 @@ class NormalFormGame:
 
 class PolymatrixGame:
 
-    def __init__(self, nf: NormalFormGame) -> None:
+    def __init__(self, players, actions, polymatrix) -> None:
+        self.players = players
+        self.actions = actions
+        self.polymatrix = polymatrix
+
+    @classmethod
+    def from_nf(cls, nf: NormalFormGame) -> None:
         polymatrix_builder = {
             (p1, p2): np.full((nf.actions[p1], nf.actions[p2]), -np.inf)
             for p1 in range(nf.players)
@@ -79,9 +85,7 @@ class PolymatrixGame:
                 for ((p2, a2), payoff) in payoffs.items():
                     polymatrix_builder[(p1, p2)][a1][a2] = payoff
 
-        self.players = nf.players
-        self.actions = nf.actions
-        self.polymatrix = polymatrix_builder
+        return cls(nf.players, nf.actions, polymatrix_builder)
 
     def to_paired_polymatrix(self):
         # for paired, in the second matrix, the second player is still the column player
