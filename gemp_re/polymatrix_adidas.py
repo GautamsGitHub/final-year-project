@@ -49,19 +49,19 @@ def adidas(
 		# print("grad dist of", grad_dist)
 		# print("makes a payoff of", polymatrix_game.payoffs_of_actions(dist))
 		# print("compared to a possible best of", polymatrix_game.best_responses_and_payoffs(dist)[1])
-		print("BR:", polymatrix_game.best_responses_and_payoffs(dist)[0])
-		print("dist:", dist)
+		# print("BR:", polymatrix_game.best_responses_and_payoffs(dist)[0])
+		# print("dist:", dist)
 		# print(y)
-		print("temperature of", temp)
-		print(grad_anneal_steps)
-		print("ADI of orginial:", unreg_exp_mean)
-		print("ADI regularized:", reg_exp_mean)
+		# print("temperature of", temp)
+		# print(grad_anneal_steps)
+		# print("ADI of orginial:", unreg_exp_mean)
+		# print("ADI regularized:", reg_exp_mean)
 		if temp < 0.01: break
 
 
 # java -jar .\gamut.jar -g RandomCompoundGame -players 3 -output GTOutput -f compound.gam
 
-filename = "games/polym4.gam"
+filename = "games/polym_big1.gam"
 nf = NormalFormGame.from_gam_file(filename)
 polymatrix_game = PolymatrixGame.from_nf(nf)
 paired_polym = polymatrix_game.to_paired_polymatrix()

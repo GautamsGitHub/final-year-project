@@ -1,208 +1,137 @@
-"""
-Copyright 2020 ADIDAS Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
+from adidas_simplified import gradients_qre_nonsym
 import numpy as np
-from scipy import special
+from nf_and_polymatrix import NormalFormGame, PolymatrixGame, Game
+from abc import ABC, abstractmethod
+from scipy.special import softmax
 
-def simplex_project_grad(g):
-	"""Project gradient onto tangent space of simplex."""
-	return g - g.sum() / g.size
 
-def gradients_qre_nonsym(dist, y, anneal_steps, payoff_matrices,
-                         num_players, temp=0., proj_grad=True,
-                         exp_thresh=1e-3, lrs=(1e-2, 1e-2),
-                         logit_clip=-1e5):
-    """Computes exploitablity gradient and aux variable gradients.
+class DeviationPayoffCalculator(ABC):
 
-    Args:
-    dist: list of 1-d np.arrays, current estimate of nash
-    y: list of 1-d np.arrays, current est. of payoff gradient
-    anneal_steps: int, elapsed num steps since last anneal
-    payoff_matrices: dict with keys as tuples of agents (i, j) and
-    values of (2 x A x A) arrays, payoffs for each joint action.
-    keys are sorted and arrays are indexed in the same order.
-    num_players: int, number of players
-    temp: non-negative float, default 0.
-    proj_grad: bool, if True, projects dist gradient onto simplex
-    exp_thresh: ADI threshold at which temp is annealed
-    lrs: tuple of learning rates (lr_x, lr_y)
-    logit_clip: float, minimum allowable logit
-    Returns:
-    gradient of ADI w.r.t. (dist, y, anneal_steps)
-    temperature (possibly annealed, i.e., reduced)
-    unregularized ADI (stochastic estimate)
-    shannon regularized ADI (stochastic estimate)
-    """
-    # first compute policy gradients and player effects (fx)
-    policy_gradient = []
-    other_player_fx = []
-    grad_y = []
-    unreg_exp = []
-    reg_exp = []
-    for i in range(num_players):
-        nabla_i = np.zeros_like(dist[i])
-        for j in range(num_players):
-            if j == i:
-                continue
-            if i < j:
-                hess_i_ij = payoff_matrices[(i, j)][0]
-            else:
-                hess_i_ij = payoff_matrices[(j, i)][1].T
+    def __init__(self, game: Game, deviation_payoffs) -> None:
+        self.game = game
+        self.deviation_payoffs = deviation_payoffs
+        return ()
 
-            nabla_ij = hess_i_ij.dot(dist[j])
-            nabla_i += nabla_ij / float(num_players - 1)
+    @abstractmethod
+    def update_deviation_payoffs(self, dists, timestep):
+        return ()
 
-        grad_y.append(y[i] - nabla_i)
 
-        if temp >= 1e-3:  # numerical under/overflow for temp < 1e-3
-            br_i = special.softmax(y[i] / temp)
-            br_i_mat = (np.diag(br_i) - np.outer(br_i, br_i)) / temp
-            log_br_i_safe = np.clip(np.log(br_i), logit_clip, 0)
-            br_i_policy_gradient = nabla_i - temp * (log_br_i_safe + 1)
-        else:
-            power = np.inf
-            s_i = np.linalg.norm(y[i], ord=power)
-            br_i = np.zeros_like(dist[i])
-            maxima_i = (y[i] == s_i)
-            br_i[maxima_i] = 1. / maxima_i.sum()
-            br_i_mat = np.zeros((br_i.size, br_i.size))
-            br_i_policy_gradient = np.zeros_like(br_i)
+class ExponentiallyWeightedDPC(DeviationPayoffCalculator):
 
-        policy_gradient_i = np.array(nabla_i)
-        if temp > 0:
-            log_dist_i_safe = np.clip(np.log(dist[i]), logit_clip, 0)
-            policy_gradient_i -= temp * (log_dist_i_safe + 1)
-        policy_gradient.append(policy_gradient_i)
+    def __init__(self, game: Game, deviation_payoffs, di_learning_rate) -> None:
+        super().__init__(game, deviation_payoffs)
+        self.hh_samples_per_player = 1
+        self.di_learning_rate = di_learning_rate
+        return ()
 
-        unreg_exp_i = np.max(y[i]) - y[i].dot(dist[i])
-        unreg_exp.append(unreg_exp_i)
+    def update_deviation_payoffs(self, dists, timestep):
+        sampled_actions = [
+            np.random.choice(self.game.actions, p=dists[player])
+            for player in range(self.game.players)
+        ]
+        fresh_deviation_payoffs = [
+            np.mean(
+                [
+                    self.game.two_player_deviation_payoffs(
+                        player, p2, sampled_actions) @ dists[p2]
+                    for p2 in np.random.choice(
+                        self.game.players[:player] +
+                        self.game.players[player + 1:],
+                        size=self.hh_samples_per_player
+                    )
+                ],
+                axis=0
+            )
+            for player in self.game.players
+        ]
+        self.deviation_payoffs = [
+            self.deviation_payoffs[player] - max(1/timestep, self.di_learning_rate) * (
+                fresh_deviation_payoffs[player] - self.deviation_payoffs[player])
+            for player in self.game.players
+        ]
+        return ()
 
-        entr_br_i = temp * special.entr(br_i).sum()
-        entr_dist_i = temp * special.entr(dist[i]).sum()
 
-        reg_exp_i = y[i].dot(br_i - dist[i]) + entr_br_i - entr_dist_i
-        reg_exp.append(reg_exp_i)
+def initials(game: Game):
+    dists = [np.ones(game.actions[p]) / game.actions[p]
+             for p in range(game.players)]
+    y = [np.zeros(game.actions[p]) for p in range(game.players)]
+    return dists, y
 
-        other_player_fx_i = (br_i - dist[i])
-        other_player_fx_i += br_i_mat.dot(br_i_policy_gradient)
-        other_player_fx.append(other_player_fx_i)
 
-    # then construct ADI gradient
-    grad_dist = []
-    for i in range(num_players):
+def keep_dist_in_simplex(
+    distribution,
+    min_prob=1e-5,
+    max_prob=1 - 1e-6
+):
+    outs_removed = np.clip(distribution, min_prob, max_prob)
+    re_summing_to_one = outs_removed / np.sum(outs_removed)
+    return re_summing_to_one
 
-        grad_dist_i = -policy_gradient[i]
-        for j in range(num_players):
-            if j == i:
-                continue
-            if i < j:
-                hess_j_ij = payoff_matrices[(i, j)][1]
-            else:
-                hess_j_ij = payoff_matrices[(j, i)][0].T
 
-            grad_dist_i += hess_j_ij.dot(other_player_fx[j])
+def grad_adi(x, y, temperature):
+    best_responses = [softmax(yi / temperature) for yi in y]
+    return ()
 
-        if proj_grad:
-            grad_dist_i = simplex_project_grad(grad_dist_i)
 
-        grad_dist.append(grad_dist_i)
+def adidas(
+    game: Game,
+    deviation_payoff_calculator: DeviationPayoffCalculator,
+    learning_rate=0.01,
+    aux_learning_rate=0.01,
+    initial_temp=1.0,
+    adi_threshold=0.001,
+    max_iters=100
+):
 
-    unreg_exp_mean = np.mean(unreg_exp)
-    reg_exp_mean = np.mean(reg_exp)
+    first_dists, first_y = initials(game)
 
-    _, lr_y = lrs
-    if (reg_exp_mean < exp_thresh) and (anneal_steps >= 1 / lr_y):
-        temp = np.clip(temp / 2., 0., 1.)
-        if temp < 1e-3:  # consistent with numerical issue above
-            temp = 0.
-        grad_anneal_steps = 0
-        # originally was
-        # grad_anneal_steps = -anneal_steps
-    else:
-        grad_anneal_steps = anneal_steps + 1
-        # originally was
-        # grad_anneal_steps = 1
+    dists = first_dists
+    y = first_y
+    grad_anneal_steps = 1
+    temp = initial_temp
 
-    return ((grad_dist, grad_y, grad_anneal_steps), temp,
-            unreg_exp_mean, reg_exp_mean)
+    for t in range(1, max_iters+1):
+        deviation_payoff_calculator.update_deviation_payoffs(dists, t)
+        y = deviation_payoff_calculator.deviation_payoffs
 
-def gradients_ate_sym(dist, y, anneal_steps, payoff_matrices,
-                      num_players, p=1, proj_grad=True,
-                      exp_thresh=1e-3, lrs=(1e-2, 1e-2)):
-    """Computes ADI gradient and aux variable gradients.
+        (grad_dist, grad_y, grad_anneal_steps), temp, unreg_exp_mean, reg_exp_mean = gradients_qre_nonsym(
+            dists,
+            y,
+            grad_anneal_steps,
+            polymatrix_game,
+            polymatrix_game.players,
+            temp=temp,
+            exp_thresh=adi_threshold,
+            lrs=(learning_rate, aux_learning_rate)
+        )
+        y = [y[p] - max(1/t, aux_learning_rate) * grad_y[p]
+             for p in range(polymatrix_game.players)]
+        # dist = [dist[p] - learning_rate * grad_dist[p] for p in range(polymatrix_game.players)]
+        dists = [keep_dist_in_simplex(
+            dists[p] - learning_rate * grad_dist[p]) for p in range(polymatrix_game.players)]
+        # print("grad dist of", grad_dist)
+        # print("makes a payoff of", polymatrix_game.payoffs_of_actions(dist))
+        # print("compared to a possible best of", polymatrix_game.best_responses_and_payoffs(dist)[1])
+        # print("BR:", polymatrix_game.best_responses_and_payoffs(dist)[0])
+        # print("dist:", dist)
+        # print(y)
+        # print("temperature of", temp)
+        # print(grad_anneal_steps)
+        # print("ADI of orginial:", unreg_exp_mean)
+        # print("ADI regularized:", reg_exp_mean)
+        if temp < 0.01:
+            break
 
-    Args:
-    dist: list of 1-d np.arrays, current estimate of nash
-    y: list of 1-d np.arrays, current est. of payoff gradient
-    anneal_steps: int, elapsed num steps since last anneal
-    payoff_matrices: dict with keys as tuples of agents (i, j) and
-    values of (2 x A x A) arrays, payoffs for each joint action.
-    keys are sorted and arrays are indexed in the same order.
-    num_players: int, number of players
-    p: float in [0, 1], Tsallis entropy-regularization
-    proj_grad: bool, if True, projects dist gradient onto simplex
-    exp_thresh: ADI threshold at which p is annealed
-    lrs: tuple of learning rates (lr_x, lr_y)
-    Returns:
-    gradient of ADI w.r.t. (dist, y, anneal_steps)
-    temperature, p (possibly annealed, i.e., reduced)
-    unregularized ADI (stochastic estimate)
-    tsallis regularized ADI (stochastic estimate)
-    """
-    nabla = payoff_matrices[0].dot(dist)
-    if p >= 1e-2:  # numerical under/overflow when power > 100.
-        power = 1. / float(p)
-        s = np.linalg.norm(y, ord=power)
-        if s == 0:
-            br = np.ones_like(y) / float(y.size)  # uniform dist
-        else:
-            br = (y / s)**power
-    else:
-        power = np.inf
-        s = np.linalg.norm(y, ord=power)
-        br = np.zeros_like(dist)
-        maxima = (y == s)
-        br[maxima] = 1. / maxima.sum()
 
-    unreg_exp = np.max(y) - y.dot(dist)
-    br_inv_sparse = 1 - np.sum(br**(p + 1))
-    dist_inv_sparse = 1 - np.sum(dist**(p + 1))
-    entr_br = s / (p + 1) * br_inv_sparse
-    entr_dist = s / (p + 1) * dist_inv_sparse
-    reg_exp = y.dot(br - dist) + entr_br - entr_dist
+# java -jar .\gamut.jar -g RandomCompoundGame -players 3 -output GTOutput -f compound.gam
 
-    entr_br_vec = br_inv_sparse * br**(1 - p)
-    entr_dist_vec = dist_inv_sparse * dist**(1 - p)
-    policy_gradient = nabla - s * dist**p
-    other_player_fx = (br - dist)
-    other_player_fx += 1 / (p + 1) * (entr_br_vec - entr_dist_vec)
-    other_player_fx_translated = payoff_matrices[1].dot(other_player_fx)
-    grad_dist = -policy_gradient
-    grad_dist += (num_players - 1) * other_player_fx_translated
-    if proj_grad:
-        grad_dist = simplex_project_grad(grad_dist)
-    grad_y = y - nabla
+filename = "games/polym_big1.gam"
+nf = NormalFormGame.from_gam_file(filename)
+polymatrix_game = PolymatrixGame.from_nf(nf)
+paired_polym = polymatrix_game.to_paired_polymatrix()
 
-    _, lr_y = lrs
-    if (reg_exp < exp_thresh) and (anneal_steps >= 1 / lr_y):
-        p = np.clip(p / 2., 0., 1.)
-        if p < 1e-2:  # consistent with numerical issue above
-            p = 0.
-        grad_anneal_steps = -anneal_steps
-    else:
-        grad_anneal_steps = 1
-
-    return ((grad_dist, grad_y, grad_anneal_steps), p, unreg_exp, reg_exp)
+print("starting adidas")
+adidas(polymatrix_game, aux_learning_rate=0.2, adi_threshold=0.1,
+       initial_temp=100.0, learning_rate=0.0001, max_iters=8000)
