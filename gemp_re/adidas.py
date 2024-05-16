@@ -5,6 +5,42 @@ from abc import ABC, abstractmethod
 from scipy.special import softmax
 
 
+class HeadToHeadCalculator(ABC):
+
+    def __init__(self, game: Game, hh_estimates) -> None:
+        self.game = game
+        self.hh_estimates = hh_estimates
+        return ()
+
+    @abstractmethod
+    def update_hh(self, dists):
+        return ()
+
+
+class SamplingHHC(HeadToHeadCalculator):
+
+    def __init__(self, game: Game, hh_estimates, hh_samples_per_player=1) -> None:
+        super().__init__(game, hh_estimates)
+        self.hh_samples_per_player = hh_samples_per_player
+        return ()
+
+    def update_hh(self, dists):
+        sampled_actions = [
+            np.random.choice(self.game.actions, p=dists[player])
+            for player in range(self.game.players)
+        ]
+        for player in self.game.players:
+            for p2 in np.random.choice(
+                self.game.players[:player] +
+                self.game.players[player + 1:],
+                size=self.hh_samples_per_player
+            ):
+                self.hh_estimates[(player, p2)] = self.game.two_player_deviation_payoffs(
+                    player, p2, sampled_actions)
+
+        return ()
+
+
 class DeviationPayoffCalculator(ABC):
 
     def __init__(self, game: Game, deviation_payoffs) -> None:
@@ -13,7 +49,7 @@ class DeviationPayoffCalculator(ABC):
         return ()
 
     @abstractmethod
-    def update_deviation_payoffs(self, dists, timestep):
+    def update_deviation_payoffs(self, hh_calculator, dists, timestep):
         return ()
 
 
@@ -21,25 +57,15 @@ class ExponentiallyWeightedDPC(DeviationPayoffCalculator):
 
     def __init__(self, game: Game, deviation_payoffs, di_learning_rate) -> None:
         super().__init__(game, deviation_payoffs)
-        self.hh_samples_per_player = 1
         self.di_learning_rate = di_learning_rate
         return ()
 
-    def update_deviation_payoffs(self, dists, timestep):
-        sampled_actions = [
-            np.random.choice(self.game.actions, p=dists[player])
-            for player in range(self.game.players)
-        ]
+    def update_deviation_payoffs(self, hh_calculator: HeadToHeadCalculator, dists, timestep):
         fresh_deviation_payoffs = [
             np.mean(
                 [
-                    self.game.two_player_deviation_payoffs(
-                        player, p2, sampled_actions) @ dists[p2]
-                    for p2 in np.random.choice(
-                        self.game.players[:player] +
-                        self.game.players[player + 1:],
-                        size=self.hh_samples_per_player
-                    )
+                    hh_calculator.hh_estimates[(player, p2)] @ dists[p2]
+                    for p2 in self.game.players[:player] + self.game.players[player + 1:]
                 ],
                 axis=0
             )
@@ -73,11 +99,12 @@ def keep_dist_in_simplex(
 def grad_adi(x, y, temperature):
     best_responses = [softmax(yi / temperature) for yi in y]
     return ()
-
+    
 
 def adidas(
     game: Game,
     deviation_payoff_calculator: DeviationPayoffCalculator,
+    hh_calculator: HeadToHeadCalculator,
     learning_rate=0.01,
     aux_learning_rate=0.01,
     initial_temp=1.0,
@@ -93,8 +120,14 @@ def adidas(
     temp = initial_temp
 
     for t in range(1, max_iters+1):
-        deviation_payoff_calculator.update_deviation_payoffs(dists, t)
+        hh_calculator.update_hh(dists)
+        deviation_payoff_calculator.update_deviation_payoffs(hh_calculator, dists, t)
         y = deviation_payoff_calculator.deviation_payoffs
+
+        estimated_BR = [
+            softmax(y[player] / temp)
+            for player in game.players
+        ]
 
         (grad_dist, grad_y, grad_anneal_steps), temp, unreg_exp_mean, reg_exp_mean = gradients_qre_nonsym(
             dists,
