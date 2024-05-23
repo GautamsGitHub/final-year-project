@@ -14,12 +14,12 @@ class Game(ABC):
 
     def two_player_deviations(self, p1, p2, pure_actions):
         return {
-            (a1, a2): [
+            (a1, a2): tuple([
                 a1 if p3 == p1 else a2 if p3 == p2 else pure_actions[p3]
                 for p3 in range(self.players)
-            ]
-            for a2 in self.actions[p2]
-            for a1 in self.actions[p1]
+            ])
+            for a1 in range(self.actions[p1])
+            for a2 in range(self.actions[p2])
         }
 
     def two_player_deviation_payoffs(self, player, p2, pure_actions):
@@ -27,9 +27,9 @@ class Game(ABC):
         return np.array([
             [
                 self.payoff_pure(player, deviations[(a1, a2)])
-                for a2 in self.actions[p2]
+                for a2 in range(self.actions[p2])
             ]
-            for a1 in self.actions[player]
+            for a1 in range(self.actions[player])
         ])
 
 
