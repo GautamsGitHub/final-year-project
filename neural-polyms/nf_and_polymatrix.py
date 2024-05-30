@@ -114,48 +114,8 @@ class NormalFormGame(Game):
 
         return payoffs
     
-    # in development. doesn't work. contains falsehoods
-    def check_if_player_action_polymatrixable(self, my_player, my_action):
-        action_combinations = product(*(
-            [range(self.actions[p]) if p != my_player else [my_action]
-             for p in range(self.players)]
-        ))
-        hh_actions_and_payoffs = np.vstack([
-            np.hstack(
-                [
-                    np.eye(self.actions[p])[action_combination[p]]
-                    for p in range(self.players) if p != my_player
-                ] + [self.payoff_pure(my_player, action_combination)]
-                # ] + [self.entries[my_player][action_combination]]
-            )
-            for action_combination in action_combinations
-        ])
-        hh_actions = hh_actions_and_payoffs[:, :-1]
-        combined_payoffs = hh_actions_and_payoffs[:, -1]
-
-        x, res, rank, s = np.linalg.lstsq(hh_actions, combined_payoffs, rcond=1e-5)
-
-        # print("linalg pinv:\n", np.dot(np.linalg.pinv(hh_actions), combined_payoffs))
-        # print("linalg lstsq:\n", np.linalg.lstsq(hh_actions, combined_payoffs, rcond=1e-5))
-
-        print("stats")
-        # print(hh_actions @ x - combined_payoffs)
-        # print(hh_actions @ np.dot(np.linalg.pinv(hh_actions), combined_payoffs) - combined_payoffs)
-        print((hh_actions @ x - hh_actions @ np.dot(np.linalg.pinv(hh_actions), combined_payoffs)))
-        # print(combined_payoffs)
-        print(res)
-
-        return False
-
-    # in development. doesn't work. contains falsehoods
     def check_if_polymatrix(self):
-        polymatrixable_so_far = True
-        for p1 in range(self.players):
-            for a1 in range(self.actions[p1]):
-                polymatrixable_so_far = self.check_if_player_action_polymatrixable(
-                    p1, a1
-                )
-        return polymatrixable_so_far
+        return self == PolymatrixGame.from_nf(self)
     
     def __str__(self) -> str:
         str_builder =""
