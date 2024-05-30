@@ -154,7 +154,7 @@ class PolymatrixGame(Game):
             #         if p1 != p2
             #     ]
             # )
-            actions[p1].T @ payoff_vectors[p1]
+            np.inner(actions[p1], payoff_vectors[p1])
             for p1 in range(self.players)
         ]
 
