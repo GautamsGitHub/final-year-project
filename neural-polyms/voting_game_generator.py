@@ -1,6 +1,6 @@
 import subprocess
 
-def gamut_call_generator(number):
+def gamut_call_generator(players, actions, number):
    return (
       "java -jar gamut.jar"
       " -g MajorityVoting"
@@ -11,7 +11,6 @@ def gamut_call_generator(number):
       f" -f generated_voting_games/majority_voting_{number}.gam"
       )
 
-seeds = range(10)
-
-for seed in seeds:
-    subprocess.call(gamut_call_generator(seed), shell=True)
+def generate_games(players, actions, seeds=range(10)):
+    for seed in seeds:
+        subprocess.call(gamut_call_generator(players, actions, seed), shell=True)
