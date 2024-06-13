@@ -124,6 +124,46 @@ class NormalFormGame(Game):
                 str_builder += str(action_combination) + " : "
                 str_builder += str(self.entries[player][(action_combination)]) + "\n\n"
         return str_builder
+    
+    def payoff_vectors(self, actions):
+        return [
+            [
+                sum([
+                    np.prod(
+                        [actions[p][action_combination[p]] if p != my_player else 1
+                        for p in range(self.players)]
+                    ) * self.entries[my_player][action_combination]
+                    for action_combination in product(*([
+                        range(self.actions[other_player]) if other_player != my_player else [my_action]
+                        for other_player in range(self.players)
+                    ]))
+                ])
+                for my_action in range(self.actions[my_player])
+            ]
+            for my_player in range(self.players)
+        ]
+
+    def best_responses_and_payoffs(self, actions):
+        pvs = self.payoff_vectors(actions)
+        return (
+            [np.argmax(pv) for pv in pvs],
+            [np.max(pv) for pv in pvs]
+        )
+    
+    def payoffs_of_actions(self, actions):
+        return [
+            sum([
+                np.prod(
+                    [actions[p][action_combination[p]]
+                    for p in range(self.players)]
+                ) * self.entries[my_player][action_combination]
+                for action_combination in product(*([
+                    range(self.actions[p])
+                    for p in range(self.players)
+                ]))
+            ])
+            for my_player in range(self.players)
+        ]
 
 
 class PolymatrixGame(Game):
@@ -226,3 +266,8 @@ class PolymatrixGame(Game):
                 for p1 in range(self.players)
             ]
         )
+    
+    def range_of_payoffs(self):
+        min_p = min([np.min(M) for M in self.polymatrix.values()])
+        max_p = max([np.max(M) for M in self.polymatrix.values()])
+        return (min_p, max_p)
