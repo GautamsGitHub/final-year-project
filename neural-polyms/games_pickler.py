@@ -1,5 +1,5 @@
-from voting_game_generator import rps_pickle
+from voting_game_generator import rps_pickle, compound_pickle, voting_pickle
 
-rps_file = "generated_games/rps_2_3_precise.pkl"
-rps_pickle(rps_file, 2, 5)
+file_name = "generated_games/voting_5_3.pkl"
+voting_pickle(file_name, 5, 3, 5000)
 print("generated games!")

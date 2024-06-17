@@ -1,6 +1,6 @@
 import numpy as np
 from nf_and_polymatrix import NormalFormGame, PolymatrixGame, Game
-from voting_game_generator import generate_temp_voting_games
+from voting_game_generator import temp_voting_games
 from math import pow
 import torch
 from torch import nn
@@ -56,7 +56,7 @@ model.train()
 
 for epoch in range(5):
     batch_size = 10
-    games = generate_temp_voting_games(
+    games = temp_voting_games(
         number_of_players, number_of_actions, seeds=range(epoch*batch_size, (epoch+1)*batch_size))
     for normal_form_game in games:
         inputs = normal_form_game
