@@ -45,8 +45,7 @@ class Game(ABC):
             for action_combination in product(*[range(a) for a in self.actions]):
                 if not isclose(
                     self.payoff_pure(player, action_combination),
-                    value.payoff_pure(player, action_combination),
-                    abs_tol=1e-5
+                    value.payoff_pure(player, action_combination)
                 ):
                     return False
         return True
@@ -98,7 +97,6 @@ class NormalFormGame(Game):
         )
 
     def flatten(self):
-        self.sort_entries()
         flattened_nfg = np.concatenate([
             np.array(list(m.values()))
             for m in self.entries
@@ -194,26 +192,12 @@ class NormalFormGame(Game):
             ])
             for my_player in range(self.players)
         ]
-    
-    def sort_entries(self):
-        sorted_entries = [
-            {
-                action_combination : d[action_combination] 
-                for action_combination in product(*[range(a) for a in self.actions])
-            }
-            for d in self.entries
-        ]
-        self.entries = sorted_entries
-    
-    def __add__(self, other):
-        assert(isinstance(other, NormalFormGame))
-        combined_flat = self.flatten() + other.flatten()
-        return NormalFormGame.from_flattened(combined_flat, self.players, self.actions[0])
 
 
 class PolymatrixGame(Game):
 
     def __str__(self) -> str:
+        print("hello world")
         str_builder = ""
         for k, v in self.polymatrix.items():
             str_builder += str(k) + ":\n"

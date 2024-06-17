@@ -1,6 +1,6 @@
 import numpy as np
 from nf_and_polymatrix import NormalFormGame, PolymatrixGame, Game
-from voting_game_generator import generate_games
+from voting_game_generator import generate_voting_games
 from math import pow
 import torch
 from torch import nn
@@ -9,12 +9,12 @@ from polym_lcp import polym_lcp_solver
 # java -jar gamut.jar -g MajorityVoting -players 5
 # -actions 4 -output GTOutput -f majority_voting.gam
 
-filename = "./poly_rps.gam"
+filename = "./rps.gam"
 # filename = "../gemp_re/games/handmade.gam"
 # filename = "../gemp_re/games/polym4.gam"
-nf = NormalFormGame.from_gam_file(filename)
+normal_form_game = NormalFormGame.from_gam_file(filename)
 
-polymatrix_game = PolymatrixGame.from_nf(nf)
+polymatrix_game = PolymatrixGame.from_nf(normal_form_game)
 paired_polym = polymatrix_game.to_paired_polymatrix()
 renf = polymatrix_game.to_nfg()
 # print(nf.check_if_polymatrix())
@@ -29,6 +29,8 @@ def judge_polym(nfg: NormalFormGame, polym: PolymatrixGame):
     ppeq = nfg.payoffs_of_actions(polym_eq)
     pvs = nfg.payoff_vectors(polym_eq)
     brs, pbrs = nfg.best_responses_and_payoffs(polym_eq)
+    print("proposed eq actions:", polym_eq)
+    print("in the normal form game")
     print("payoff vectors:", pvs)
     print("best responses:", brs)
     print("payoffs of best responses", pbrs)
@@ -61,5 +63,5 @@ class GamePolymNeuralNetwork(nn.Module):
     
 
 print("LCP starting")
-judge_polym(nf, polymatrix_game)
+judge_polym(normal_form_game, polymatrix_game)
 print("LCP done")

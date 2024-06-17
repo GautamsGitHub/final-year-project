@@ -1,10 +1,9 @@
 """
 By Gautam based on QuantEcon
 """
-import numpy as np
-from quantecon.optimize.pivoting import _pivoting, _lex_min_ratio_test
-from quantecon.optimize.lcp_lemke import _get_solution
-from nf_and_polymatrix import PolymatrixGame
+import jax.numpy as np
+from quantecon_jax import pivoting, lex_min_ratio_test, get_solution
+from nf_and_polymatrix_jax import PolymatrixGame
 
 def polym_lcp_solver(polym: PolymatrixGame):
     LOW_AVOIDER = 2.0
@@ -41,7 +40,6 @@ def polym_lcp_solver(polym: PolymatrixGame):
     ])
 
     basis = np.array(range(n))
-    z = np.empty(n)
 
     starting_player_actions = {
         player : 0
@@ -51,11 +49,11 @@ def polym_lcp_solver(polym: PolymatrixGame):
     for player in range(polym.players):
         row = sum(polym.actions) + player
         col = n + sum(polym.actions[:player]) + starting_player_actions[player]
-        _pivoting(tableau, col, row)
-        basis[row] = col
+        tableau = pivoting(tableau, col, row)
+        basis = basis.at[row].set(col)
     
     # Array to store row indices in lex_min_ratio_test
-    argmins = np.empty(n + polym.players, dtype=np.int_)
+    # argmins = np.empty(n + polym.players, dtype=np.int_)
     p = 0
     retro = False
     while p < polym.players:
@@ -68,14 +66,14 @@ def polym_lcp_solver(polym: PolymatrixGame):
         retro = False
 
         while True:
-            # _get_solution(tableau, basis, z)
 
-            _, pivrow = _lex_min_ratio_test(
-                tableau, pivcol, 0, argmins,
+            _, pivrow = lex_min_ratio_test(
+                tableau, pivcol, 0,
             )
 
-            _pivoting(tableau, pivcol, pivrow)
-            basis[pivrow], leaving_var = pivcol, basis[pivrow]
+            tableau = pivoting(tableau, pivcol, pivrow)
+            leaving_var = basis[pivrow]
+            basis = basis.at[pivrow].set(pivcol)
             
             if leaving_var == finishing_x or leaving_var == finishing_y:
                 p += 1
@@ -90,7 +88,7 @@ def polym_lcp_solver(polym: PolymatrixGame):
             else:
                 pivcol = leaving_var - n
     
-    combined_solution = _get_solution(tableau, basis, z)
+    combined_solution = get_solution(tableau, basis)
 
     eq_strategies = [
         combined_solution[sum(polym.actions[:player]) : sum(polym.actions[:player+1])]

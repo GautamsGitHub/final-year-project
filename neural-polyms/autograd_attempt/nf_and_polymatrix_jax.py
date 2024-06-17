@@ -1,4 +1,4 @@
-import numpy as np
+import jax.numpy as np
 from itertools import product
 from abc import ABC, abstractmethod
 from math import isclose
@@ -32,23 +32,18 @@ class Game(ABC):
             ]
             for a1 in range(self.actions[player])
         ])
-
+    
     def __eq__(self, value: object) -> bool:
-        if not isinstance(value, Game):
-            return False
-        if self.players != value.players:
-            return False
+        if not isinstance(value, Game): return False
+        if self.players != value.players: return False
         for player in range(self.players):
-            if self.actions[player] != value.actions[player]:
-                return False
+            if self.actions[player] != value.actions[player]: return False
         for player in range(self.players):
             for action_combination in product(*[range(a) for a in self.actions]):
                 if not isclose(
                     self.payoff_pure(player, action_combination),
-                    value.payoff_pure(player, action_combination),
-                    abs_tol=1e-5
-                ):
-                    return False
+                    value.payoff_pure(player, action_combination)
+                ): return False
         return True
 
 
@@ -81,14 +76,14 @@ class NormalFormGame(Game):
             ]
 
         return cls(players, actions, entries)
-
+    
     @classmethod
     def from_flattened(cls, flattened_nfg, number_of_players, number_of_actions):
         combs_pp = pow(number_of_actions, number_of_players)
         entries = [
             dict(zip(product(
                 *[range(number_of_actions) for _ in range(number_of_players)]),
-                flattened_nfg[player * combs_pp: (player + 1) * combs_pp]))
+                flattened_nfg[player * combs_pp : (player + 1) *combs_pp]))
             for player in range(number_of_players)
         ]
         return cls(
@@ -96,9 +91,8 @@ class NormalFormGame(Game):
             [number_of_actions for _ in range(number_of_players)],
             entries
         )
-
+    
     def flatten(self):
-        self.sort_entries()
         flattened_nfg = np.concatenate([
             np.array(list(m.values()))
             for m in self.entries
@@ -141,30 +135,28 @@ class NormalFormGame(Game):
             payoff_labels, hh_payoffs_array)}
 
         return payoffs
-
+    
     def check_if_polymatrix(self):
         return self == PolymatrixGame.from_nf(self)
-
+    
     def __str__(self) -> str:
-        str_builder = ""
+        str_builder =""
         for player in range(self.players):
             for action_combination in product(*[range(a) for a in self.actions]):
                 str_builder += str(action_combination) + " : "
-                str_builder += str(self.entries[player]
-                                   [(action_combination)]) + "\n\n"
+                str_builder += str(self.entries[player][(action_combination)]) + "\n\n"
         return str_builder
-
+    
     def payoff_vectors(self, actions):
         return [
             [
                 sum([
                     np.prod(
-                        [actions[p][action_combination[p]] if p != my_player else 1
-                         for p in range(self.players)]
+                        np.array([actions[p][action_combination[p]] if p != my_player else 1
+                        for p in range(self.players)])
                     ) * self.entries[my_player][action_combination]
                     for action_combination in product(*([
-                        range(self.actions[other_player]) if other_player != my_player else [
-                            my_action]
+                        range(self.actions[other_player]) if other_player != my_player else [my_action]
                         for other_player in range(self.players)
                     ]))
                 ])
@@ -176,16 +168,16 @@ class NormalFormGame(Game):
     def best_responses_and_payoffs(self, actions):
         pvs = self.payoff_vectors(actions)
         return (
-            [np.argmax(pv) for pv in pvs],
-            [np.max(pv) for pv in pvs]
+            [np.argmax(np.array(pv)) for pv in pvs],
+            [np.max(np.array(pv)) for pv in pvs]
         )
-
+    
     def payoffs_of_actions(self, actions):
         return [
             sum([
                 np.prod(
-                    [actions[p][action_combination[p]]
-                     for p in range(self.players)]
+                    np.array([actions[p][action_combination[p]]
+                    for p in range(self.players)])
                 ) * self.entries[my_player][action_combination]
                 for action_combination in product(*([
                     range(self.actions[p])
@@ -194,26 +186,12 @@ class NormalFormGame(Game):
             ])
             for my_player in range(self.players)
         ]
-    
-    def sort_entries(self):
-        sorted_entries = [
-            {
-                action_combination : d[action_combination] 
-                for action_combination in product(*[range(a) for a in self.actions])
-            }
-            for d in self.entries
-        ]
-        self.entries = sorted_entries
-    
-    def __add__(self, other):
-        assert(isinstance(other, NormalFormGame))
-        combined_flat = self.flatten() + other.flatten()
-        return NormalFormGame.from_flattened(combined_flat, self.players, self.actions[0])
 
 
 class PolymatrixGame(Game):
 
     def __str__(self) -> str:
+        print("hello world")
         str_builder = ""
         for k, v in self.polymatrix.items():
             str_builder += str(k) + ":\n"
@@ -226,29 +204,39 @@ class PolymatrixGame(Game):
 
     @classmethod
     def from_nf(cls, nf: NormalFormGame):
+        polymatrix_pre_builder = {
+            (p1, p2, a1, a2): payoffs.get((p2, a2), -np.inf) 
+            for p1 in range(nf.players)
+            for a1 in range(nf.actions[p1])
+            for payoffs in [nf.hh_payoff_player(p1, a1)]
+            for p2 in range(nf.players)
+            if p1 != p2
+            for a2 in range(nf.actions[p2])
+        }
         polymatrix_builder = {
-            (p1, p2): np.full((nf.actions[p1], nf.actions[p2]), -np.inf)
+            (p1, p2) : np.array([
+                [
+                    polymatrix_pre_builder[(p1, p2, a1, a2)]
+                    for a2 in range(nf.actions[p2])
+                ]
+                for a1 in range(nf.actions[p1])
+            ])
             for p1 in range(nf.players)
             for p2 in range(nf.players)
             if p1 != p2
         }
-        for p1 in range(nf.players):
-            for a1 in range(nf.actions[p1]):
-                payoffs = nf.hh_payoff_player(p1, a1)
-                for ((p2, a2), payoff) in payoffs.items():
-                    polymatrix_builder[(p1, p2)][a1][a2] = payoff
 
         return cls(nf.players, nf.actions, polymatrix_builder)
-
+    
     @classmethod
     def from_flattened(cls, flattened_polym, number_of_players, number_of_actions):
         flat_mats_mat = np.reshape(
             flattened_polym,
-            (
-                number_of_players * (number_of_players - 1),
-                number_of_actions*number_of_actions
-            )
-        )
+                (
+                    number_of_players * (number_of_players - 1),
+                    number_of_actions*number_of_actions
+                    )
+                )
         mats_list = [
             np.reshape(flat_ar, (number_of_actions, number_of_actions))
             for flat_ar in flat_mats_mat
@@ -260,12 +248,12 @@ class PolymatrixGame(Game):
             if p1 != p2
         ]
         pm_entries = dict(zip(pm_keys, mats_list))
-        return (cls(
-            number_of_players,
-            [number_of_actions for _ in range(number_of_players)],
+        return(cls(
+            number_of_players, 
+            [number_of_actions for _ in range(number_of_players)], 
             pm_entries
-        ))
-
+            ))
+    
     def flatten(self):
         flattened_polym = np.concatenate([
             np.ravel(self.polymatrix[p1, p2])
@@ -299,13 +287,6 @@ class PolymatrixGame(Game):
     def payoffs_of_actions(self, actions):
         payoff_vectors = self.payoff_vectors(actions)
         return [
-            # sum(
-            #     [
-            #         actions[p1].T @ self.polymatrix[(p1, p2)] @ actions[p2]
-            #         for p2 in range(self.players)
-            #         if p1 != p2
-            #     ]
-            # )
             np.inner(actions[p1], payoff_vectors[p1])
             for p1 in range(self.players)
         ]
@@ -345,12 +326,12 @@ class PolymatrixGame(Game):
                 for p1 in range(self.players)
             ]
         )
-
+    
     def range_of_payoffs(self):
         min_p = min([np.min(M) for M in self.polymatrix.values()])
         max_p = max([np.max(M) for M in self.polymatrix.values()])
         return (min_p, max_p)
-
+    
     def to_one_big_matrix(self, costs=True, low_avoider=2.0):
         positive_cost_maker = self.range_of_payoffs()[1] + low_avoider
         sign = -1 if costs else 1
@@ -359,7 +340,7 @@ class PolymatrixGame(Game):
                 np.zeros((self.actions[player], self.actions[player])) if p2 == player
                 else (positive_cost_maker + sign * self.polymatrix[(player, p2)])
                 for p2 in range(self.players)
-            ])
+                ])
             for player in range(self.players)
-        ])
+            ])
         return M

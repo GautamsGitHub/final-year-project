@@ -1,6 +1,6 @@
 import numpy as np
 from nf_and_polymatrix import NormalFormGame, PolymatrixGame, Game
-from voting_game_generator import generate_temp_games
+from voting_game_generator import generate_temp_voting_games
 from math import pow
 import torch
 from torch import nn
@@ -13,12 +13,9 @@ from itertools import product
 filename = "./rps.gam"
 # filename = "../gemp_re/games/handmade.gam"
 # filename = "../gemp_re/games/polym4.gam"
-nfg = NormalFormGame.from_gam_file(filename)
+normal_form_game = NormalFormGame.from_gam_file(filename)
 
-polymatrix_game = PolymatrixGame.from_nf(nfg)
-paired_polym = polymatrix_game.to_paired_polymatrix()
-renf = polymatrix_game.to_nfg()
-# print(nf.check_if_polymatrix())
+polymatrix_game = PolymatrixGame.from_nf(normal_form_game)
 
 number_of_players = 3
 number_of_actions = 2
@@ -59,18 +56,18 @@ model.train()
 
 for epoch in range(5):
     batch_size = 10
-    games = generate_temp_games(
+    games = generate_temp_voting_games(
         number_of_players, number_of_actions, seeds=range(epoch*batch_size, (epoch+1)*batch_size))
-    for nfg in games:
-        inputs = nfg
+    for normal_form_game in games:
+        inputs = normal_form_game
 
         outputs = model(inputs)
         all_actions = np.squeeze(outputs.detach().numpy())
-        actions = [all_actions[sum(nfg.actions[:p]):sum(nfg.actions[:p + 1])] for p in range(nfg.players)]
+        actions = [all_actions[sum(normal_form_game.actions[:p]):sum(normal_form_game.actions[:p + 1])] for p in range(normal_form_game.players)]
 
-        best_payoffs = torch.tensor(nfg.best_responses_and_payoffs(actions)[1])
-        our_payoffs = torch.tensor(nfg.payoffs_of_actions(actions))
-        payoff_vectors = nfg.payoff_vectors(actions)
+        best_payoffs = torch.tensor(normal_form_game.best_responses_and_payoffs(actions)[1])
+        our_payoffs = torch.tensor(normal_form_game.payoffs_of_actions(actions))
+        payoff_vectors = normal_form_game.payoff_vectors(actions)
         payoff_grad = -torch.tensor(np.concatenate([
             pv - np.mean(pv)
             for pv in payoff_vectors
