@@ -1,0 +1,26 @@
+There are many different methods used in this
+project so we do not provide an overall requirements file
+because it could contain things unnecessary for the part
+you want to use.
+
+To summarise:
+
+Autograd Attempt uses JAX, through which it also uses numpy,
+flax, and optax.
+
+gambit_experiment uses pygambit which is under development.
+
+The following all depend on numpy {
+
+ADIDAS uses scipy.
+
+qp_games uses scipy through JAX but JAX cannot automatically
+differentiate the scipy function used so just scipy would work.
+
+qp_identi_games uses cvxpy.
+
+Our LCP solver uses quantecon.
+
+}
+
+The Julia part requires PyCall, Zygote, Flux, StatsBase, InferOpt.
