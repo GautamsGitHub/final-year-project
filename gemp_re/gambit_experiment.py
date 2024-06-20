@@ -3,7 +3,7 @@ import pygambit as gbt
 # make the nfg by
 # java -jar .\gamut.jar -g Chicken -output GambitOutput -f chicken.nfg
 
-game = gbt.Game.read_game("chicken.nfg")
+game = gbt.Game.read_game("games/chicken.nfg")
 
 print("game", game)
 

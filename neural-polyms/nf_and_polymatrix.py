@@ -5,15 +5,44 @@ from math import isclose
 
 
 class Game(ABC):
+    
     def __init__(self, players, actions) -> None:
+        """Creates a game.
+
+        Args:
+            players : Number of players in game.
+            actions : List of how many actions each player has.
+        """        
         self.players = players
         self.actions = actions
 
     @abstractmethod
     def payoff_pure(self, player, pure_actions):
+        """Payoff to player at pure action combination.
+
+        Args:
+            player : Player to get payoff of.
+            pure_actions : Pure action combination being played.
+
+        Returns:
+            _type_: Payoff to player.
+        """        
         return 0.0
 
     def two_player_deviations(self, p1, p2, pure_actions):
+        """
+        Action combinations that result from two players
+        deviating.
+
+        Args:
+            p1 : First deviating player.
+            p2 : Second deviating player.
+            pure_actions : 
+                Pure action combination orginially being played.
+
+        Returns:
+            _type_: Action combination at each 2 player deviation.
+        """        
         return {
             (a1, a2): tuple([
                 a1 if p3 == p1 else a2 if p3 == p2 else pure_actions[p3]
@@ -24,6 +53,16 @@ class Game(ABC):
         }
 
     def two_player_deviation_payoffs(self, player, p2, pure_actions):
+        """Payoff matrix to player at 2 player deviations.
+
+        Args:
+            player : Deviating player whose payoffs are given.
+            p2 : Other deviating player
+            pure_actions : Pure action combination orginially being played.
+
+        Returns:
+            _type_: Payoff matrix to player at 2 player deviations.
+        """        
         deviations = self.two_player_deviations(player, p2, pure_actions)
         return np.array([
             [
@@ -55,11 +94,31 @@ class Game(ABC):
 class NormalFormGame(Game):
 
     def __init__(self, players, actions, entries) -> None:
+        """Creates a Normal Form Game.
+
+        Args:
+            players (_type_): Number of players.
+            actions (_type_): 
+                List of how many actions each player has.
+            entries (_type_): 
+                Payoff to player at each pure action
+                combination for each player.
+        """        
         super().__init__(players, actions)
         self.entries = entries
 
     @classmethod
     def from_gam_file(cls, filename):
+        """
+        Creates a Normal Form Game from a .gam file with format
+        as specified by GameTracer.
+
+        Args:
+            filename (_type_): Name of gam file.
+
+        Returns:
+            _type_: New Normal Form Game.
+        """        
         entries = []
         with open(filename, 'r') as file:
             lines = file.readlines()
@@ -84,6 +143,25 @@ class NormalFormGame(Game):
 
     @classmethod
     def from_flattened(cls, flattened_nfg, number_of_players, number_of_actions):
+        """
+        Creates a Normal Form Game
+        from a flattened Normal Form Game.
+
+        Args:
+            flattened_nfg (_type_): 
+                Array of all of the entries in a Normal Form Game.
+                With all of the payoffs of one player before the
+                next. With the player actions going up starting at
+                the last player.
+            number_of_players (_type_):
+                Number of players in the flattened game.
+            number_of_actions (_type_):
+                Number of actions per player.
+                All players must have the same number of actions.
+
+        Returns:
+            _type_: New Normal Form Game.
+        """        
         combs_pp = pow(number_of_actions, number_of_players)
         entries = [
             dict(zip(product(
@@ -98,6 +176,16 @@ class NormalFormGame(Game):
         )
 
     def flatten(self):
+        """
+        Flatten this into an array.
+
+        Returns:
+            _type_: 
+                Array of all of the entries in a Normal Form Game.
+                With all of the payoffs of one player before the
+                next. With the player actions going up starting at
+                the last player.
+        """        
         self.sort_entries()
         flattened_nfg = np.concatenate([
             np.array(list(m.values()))
@@ -109,6 +197,21 @@ class NormalFormGame(Game):
         return self.entries[player][pure_actions]
 
     def hh_payoff_player(self, my_player, my_action):
+        """
+        Approximates the payoffs to a player when they play
+        an action with values at the actions of other players
+        that try to sum to the payoff.
+        Precise when the game can be represented with a polymatrix.
+
+        Args:
+            my_player (_type_): _description_
+            my_action (_type_): _description_
+
+        Returns:
+            _type_:
+                Dictionary giving an approximate component
+                of the payoff at each action for each other player.
+        """        
         action_combinations = product(*(
             [range(self.actions[p]) if p != my_player else [my_action]
              for p in range(self.players)]
@@ -142,7 +245,14 @@ class NormalFormGame(Game):
 
         return payoffs
 
-    def check_if_polymatrix(self):
+    def check_if_polymatrix(self) -> bool:
+        """
+        Check if this game can be represented by a Polymatrix
+        without loss of
+
+        Returns:
+            bool: True if it can.
+        """
         return self == PolymatrixGame.from_nf(self)
 
     def __str__(self) -> str:
@@ -155,6 +265,17 @@ class NormalFormGame(Game):
         return str_builder
 
     def payoff_vectors(self, actions):
+        """
+        Payoffs to each action for each player if the other
+        players stay at their mixed actions.
+
+        Args:
+            actions (_type_):
+                Mixed action combination to deviate from.
+
+        Returns:
+            _type_: Payoffs to deviations for each player.
+        """        
         return [
             [
                 sum([
@@ -174,6 +295,20 @@ class NormalFormGame(Game):
         ]
 
     def best_responses_and_payoffs(self, actions):
+        """
+        Best Responses to a mixed action combination
+        as the action numbers of each player and
+        the payoff that player gets if they unilaterally
+        deviate to that Best Response.
+
+        Args:
+            actions (_type_): Mixed action combination.
+
+        Returns:
+            _type_: 
+                Tuple with first entry best responses
+                and second entry their payoffs.
+        """        
         pvs = self.payoff_vectors(actions)
         return (
             [np.argmax(pv) for pv in pvs],
@@ -181,6 +316,15 @@ class NormalFormGame(Game):
         )
 
     def payoffs_of_actions(self, actions):
+        """
+        Payoff to each player at a mixed action combination.
+
+        Args:
+            actions (_type_): Mixed action combination
+
+        Returns:
+            _type_: Payoffs to each player.
+        """        
         return [
             sum([
                 np.prod(
@@ -196,6 +340,11 @@ class NormalFormGame(Game):
         ]
     
     def sort_entries(self):
+        """
+        Puts the payoffs at the entries in order
+        so the player action numbers go up, starting at
+        the last player.
+        """
         sorted_entries = [
             {
                 action_combination : d[action_combination] 
@@ -226,6 +375,16 @@ class PolymatrixGame(Game):
 
     @classmethod
     def from_nf(cls, nf: NormalFormGame):
+        """
+        Creates a Polymatrix approximation to a
+        Normal Form Game. Precise if possible.
+
+        Args:
+            nf (NormalFormGame): Normal Form Game to approximate.
+
+        Returns:
+            _type_: New Polymatrix Game.
+        """        
         polymatrix_builder = {
             (p1, p2): np.full((nf.actions[p1], nf.actions[p2]), -np.inf)
             for p1 in range(nf.players)
@@ -242,6 +401,25 @@ class PolymatrixGame(Game):
 
     @classmethod
     def from_flattened(cls, flattened_polym, number_of_players, number_of_actions):
+        """
+        Creates a Polymatrix Game
+        from a flattened Polymatrix Game.
+
+        Args:
+            flattened_nfg (_type_): 
+                Array of all of the entries in each matrix
+                of the Polymatrix.
+                With all of the payoffs of one player before the
+                next. With the opponent going up.
+            number_of_players (_type_):
+                Number of players in the flattened game.
+            number_of_actions (_type_):
+                Number of actions per player.
+                All players must have the same number of actions.
+
+        Returns:
+            _type_: New Polymatrix Game.
+        """    
         flat_mats_mat = np.reshape(
             flattened_polym,
             (
@@ -267,6 +445,17 @@ class PolymatrixGame(Game):
         ))
 
     def flatten(self):
+        """
+        Flattens Polymatrix into array. Not equivalent
+        to turning into Normal Form Game then flattening.
+
+        Returns:
+            _type_:
+                Array of all of the entries in each matrix
+                of the Polymatrix.
+                With all of the payoffs of one player before the
+                next. With the opponent going up. 
+        """        
         flattened_polym = np.concatenate([
             np.ravel(self.polymatrix[p1, p2])
             for p1 in range(self.players)
@@ -276,6 +465,16 @@ class PolymatrixGame(Game):
         return flattened_polym
 
     def payoff_pure(self, player, pure_actions):
+        """
+        Payoff to a player at a pure action combination.
+
+        Args:
+            player (_type_): _description_
+            pure_actions (_type_): _description_
+
+        Returns:
+            _type_: Payoff
+        """        
         return sum(
             [
                 self.polymatrix[(player, p2)
@@ -286,6 +485,13 @@ class PolymatrixGame(Game):
         )
 
     def to_paired_polymatrix(self):
+        """
+        Represent the head to head games with bimatrix games with
+        a row player and column player.
+
+        Returns:
+            _type_: Bimatrix games.
+        """
         # for paired, in the second matrix, the second player is still the column player
         return {
             (p1, p2): (
@@ -297,20 +503,33 @@ class PolymatrixGame(Game):
         }
 
     def payoffs_of_actions(self, actions):
+        """
+        Payoff to each player at a mixed action combination.
+
+        Args:
+            actions (_type_): Mixed action combination.
+
+        Returns:
+            _type_: Payoff to each player.
+        """        
         payoff_vectors = self.payoff_vectors(actions)
         return [
-            # sum(
-            #     [
-            #         actions[p1].T @ self.polymatrix[(p1, p2)] @ actions[p2]
-            #         for p2 in range(self.players)
-            #         if p1 != p2
-            #     ]
-            # )
             np.inner(actions[p1], payoff_vectors[p1])
             for p1 in range(self.players)
         ]
 
     def payoff_vectors(self, actions):
+        """
+        Payoffs to each action for each player if the other
+        players stay at their mixed actions.
+
+        Args:
+            actions (_type_):
+                Mixed action combination to deviate from.
+
+        Returns:
+            _type_: Payoffs to deviations for each player.
+        """
         return [
             sum(
                 [
@@ -323,6 +542,20 @@ class PolymatrixGame(Game):
         ]
 
     def best_responses_and_payoffs(self, actions):
+        """
+        Best Responses to a mixed action combination
+        as the action numbers of each player and
+        the payoff that player gets if they unilaterally
+        deviate to that Best Response.
+
+        Args:
+            actions (_type_): Mixed action combination.
+
+        Returns:
+            _type_: 
+                Tuple with first entry best responses
+                and second entry their payoffs.
+        """
         pvs = self.payoff_vectors(actions)
         return (
             [np.argmax(pv) for pv in pvs],
@@ -330,6 +563,11 @@ class PolymatrixGame(Game):
         )
 
     def to_nfg(self):
+        """Gives the equivalent Normal Form Game.
+
+        Returns:
+            _type_: New, equivalent Normal Form Game.
+        """
         return NormalFormGame(
             self.players,
             self.actions,
@@ -347,11 +585,35 @@ class PolymatrixGame(Game):
         )
 
     def range_of_payoffs(self):
+        """
+        The lowest and highest components of payoff from
+        head to head games.
+
+        Returns:
+            _type_: Tuple of minimum and maximum.
+        """
         min_p = min([np.min(M) for M in self.polymatrix.values()])
         max_p = max([np.max(M) for M in self.polymatrix.values()])
         return (min_p, max_p)
 
     def to_one_big_matrix(self, costs=True, low_avoider=2.0):
+        """
+        Puts all of the matrices of the Polymatrix Game into
+        One Big Matrix where the submatrices on the diagonal
+        are zero and the submatrices at (i, j) are the
+        component payoffs to player i in the head to head game
+        between players i and j.
+
+        Args:
+            costs (bool, optional):
+                Should the payoffs be turned into costs.
+            low_avoider (float, optional): 
+                A number to keep the entries positive.
+                Defaults to 2.0.
+
+        Returns:
+            _type_: One Big Matrix.
+        """
         positive_cost_maker = self.range_of_payoffs()[1] + low_avoider
         sign = -1 if costs else 1
         M = np.vstack([

@@ -8,16 +8,8 @@ pushfirst!(pyimport("sys")."path", "")
 
 export nfg_from_file, solve_lcp, judge_eq, number_of_players, number_of_actions, say_hello, apythonfun, load_data
 
-number_of_players = 2
+number_of_players = 5
 number_of_actions = 3
-
-# function __init__()
-    
-#     py"""
-#     import wrappers
-#     """
-
-# end
 
 say_hello() = println("Hello!")
 

@@ -1,4 +1,3 @@
-from adidas_simplified import gradients_qre_nonsym
 import numpy as np
 from nf_and_polymatrix import NormalFormGame, PolymatrixGame, Game
 from abc import ABC, abstractmethod
@@ -20,7 +19,12 @@ class HeadToHeadCalculator(ABC):
 
 
 class SamplingHHC(HeadToHeadCalculator):
-
+    """
+    Estimates the head to head values that make up the
+    Hessian using combinations of two player deviations
+    from a sampled pure strategy combination from the
+    current mixed strategy distributions.
+    """
     def __init__(self, game: Game, hh_samples_per_player=1) -> None:
         hh_zeros = {
             (player, p2): np.zeros((game.actions[player], game.actions[p2]))
@@ -49,6 +53,12 @@ class SamplingHHC(HeadToHeadCalculator):
 
 
 class FullHHC(HeadToHeadCalculator):
+    """
+    Estimates the head to head values that make up the
+    Hessian using all of the combinations of
+    two player deviations from the current mixed strategy
+    distributions.
+    """
 
     def __init__(self, game: Game) -> None:
         hh_zeros = {
@@ -92,6 +102,12 @@ class DeviationPayoffCalculator(ABC):
 
 
 class ExponentiallyWeightedDPC(DeviationPayoffCalculator):
+    """
+    If we do not sample all of the deviation payoffs at each
+    point, then it is useful to use a weighted average of the
+    deviation payoffs we calculated nearby to get an amortised
+    calculation.
+    """
 
     def __init__(self, game: Game, di_learning_rate) -> None:
         deviation_payoffs = [np.zeros(game.actions[p])
@@ -194,7 +210,8 @@ def adidas(
     adi_threshold=0.001,
     max_iters=100
 ):
-
+    
+    # choose our starting distributions.
     # dists = [np.ones(game.actions[p]) / game.actions[p]
     #          for p in range(game.players)]
     dists = [
@@ -227,7 +244,7 @@ def adidas(
         current_adi_estimate = adi_estimate(game, dists, y, temperature)
 
         if current_adi_estimate < adi_threshold:
-            input()
+            input("annealing!")
             temperature = temperature / 2
 
         print("step number:", step)
@@ -241,44 +258,3 @@ def adidas(
 
         if temperature < 0.001:
             break
-
-
-# java -jar .\gamut.jar -g RandomCompoundGame -players 3 -output GTOutput -f compound.gam
-
-# filename = "games/handmade.gam"
-filename = "games/compound1.gam"
-nf = NormalFormGame.from_gam_file(filename)
-polymatrix_game = PolymatrixGame.from_nf(nf)
-paired_polym = polymatrix_game.to_paired_polymatrix()
-
-print("starting adidas")
-
-# For the 1 vs 1 game:
-# hh_calc = SamplingHHC(nf, 1)
-# dpc = ExponentiallyWeightedDPC(nf, di_learning_rate=0.8)
-# adidas(
-#     nf,
-#     dpc,
-#     hh_calc,
-#     learning_rate=1e-3,
-#     adi_threshold=1e-3,
-#     initial_temperature=8,
-#     max_iters=400
-# )
-
-# For the compound game:
-# hh_calc = SamplingHHC(nf, 1)
-hh_calc = FullHHC(nf)
-dpc = ExponentiallyWeightedDPC(nf, di_learning_rate=1.0)
-adidas(
-    nf,
-    dpc,
-    hh_calc,
-    learning_rate=1e-4,
-    adi_threshold=0.5,
-    initial_temperature=0.01,
-    max_iters=1000
-)
-
-# adidas(polymatrix_game, aux_learning_rate=0.2, adi_threshold=0.1,
-#        initial_temperature=100.0, learning_rate=0.0001, max_iters=8000)

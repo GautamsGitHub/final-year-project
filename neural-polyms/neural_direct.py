@@ -7,6 +7,12 @@ from torch import nn
 from polym_lcp import polym_lcp_solver
 from itertools import product
 
+"""
+Trying to find Nash Equilibria directly using a Neural Network
+without taking advantage of outr knowledge of games except for
+in computing the loss.
+"""
+
 # java -jar gamut.jar -g MajorityVoting -players 5
 # -actions 4 -output GTOutput -f majority_voting.gam
 

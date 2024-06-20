@@ -29,6 +29,17 @@ def flat_judge_eq(
         number_of_players,
         number_of_actions
 ):
+    """
+    We say our loss function we are trying to minimise is
+    the payoff from our best responses to the proposed
+    action combination minus the payoff of the action combination.
+
+    Args:
+        flattened_eq (_type_): layer holding proposed equilbrium
+        flattened_nfg (_type_): layer holding input game
+        number_of_players (_type_): _description_
+        number_of_actions (_type_): _description_
+    """   
     nfg = NormalFormGame.from_flattened(
         flattened_nfg, number_of_players, number_of_actions)
     actions = [
@@ -48,6 +59,18 @@ def flat_judge_eq_grad(
         number_of_players,
         number_of_actions
 ):
+    """
+    We take a guess at the gradient of the loss with
+    respect to the preceding proposed equilibrium actions layer
+    by suggesting we can minimise the loss by moving towards
+    our best responses to the input game.
+
+    Args:
+        flattened_eq (_type_): layer holding proposed equilbrium
+        flattened_nfg (_type_): layer holding input game
+        number_of_players (_type_): _description_
+        number_of_actions (_type_): _description_
+    """
     nfg = NormalFormGame.from_flattened(
         flattened_nfg, number_of_players, number_of_actions)
     actions = [
